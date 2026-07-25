@@ -1,0 +1,21 @@
+# Secretos y entorno
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Logs y temporales
+*.log
+.DS_Store

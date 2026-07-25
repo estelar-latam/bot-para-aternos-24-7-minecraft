@@ -1,0 +1,7 @@
+run = "bash start.sh"
+
+[nix]
+channel = "stable-23_11"
+
+[env]
+PYTHONUNBUFFERED = "1"

@@ -1,0 +1,10 @@
+# API interna de Aternos (login, estado, start/stop).
+# Si Aternos cambia su web y el login falla, actualiza esta versión:
+#   pip install --upgrade python-aternos
+python-aternos>=3.1.0
+
+# Servidor web mínimo para el endpoint de keep-alive (UptimeRobot).
+Flask>=3.0.0
+
+# Carga de variables desde el archivo .env
+python-dotenv>=1.0.0

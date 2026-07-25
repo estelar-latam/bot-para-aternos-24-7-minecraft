@@ -1,0 +1,17 @@
+{
+  "name": "bot-aternos-24-7",
+  "version": "1.0.0",
+  "description": "Bot AFK (mineflayer) que mantiene conectado un servidor Aternos de Minecraft para evitar que se apague por inactividad.",
+  "main": "afk_bot.js",
+  "scripts": {
+    "start": "node afk_bot.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mineflayer": "^4.20.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
