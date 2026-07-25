@@ -1,18 +1,27 @@
 /**
- * Bot para servidor Aternos con mineflayer.
+ * Bot para servidor Aternos con mineflayer + PANEL DE CONTROL web.
  *
  * MODOS (variable de entorno MOVEMENT):
  *   - "off": modo ESTABLE. No se mueve (physics off). Fiable en versiones muy
  *     nuevas (ej. MC 26.2) que rechazan el movimiento. Solo mantiene la conexión.
- *   - "on" : modo ACTIVO. El bot CAMINA por el mapa, LUCHA contra mobs enemigos,
- *     HUYE cuando le quedan pocos corazones y RECOGE/EQUIPA armas.
- *     Requiere una versión compatible con mineflayer (ej. 1.20.x / 1.21.x).
+ *   - "on" : modo ACTIVO. Camina, lucha contra mobs, huye con poca vida y
+ *     recoge/equipa armas. Requiere versión compatible (1.20.x / 1.21.x).
+ *
+ * PANEL: este proceso levanta un servidor web (Express) en el puerto de Render.
+ *   - GET  /            -> panel de control (panel.html)
+ *   - GET  /health      -> para UptimeRobot
+ *   - GET  /api/status  -> estado del bot (JSON)
+ *   - POST /api/action  -> controlar el bot
+ *   - POST /api/login   -> validar el token del panel
+ * Si defines PANEL_TOKEN, /api/status y /api/action exigen ese token.
  *
  * AVISO: los bots AFK van contra los Términos de Servicio de Aternos y pueden
  * provocar el baneo de tu cuenta. Úsalo bajo tu propia responsabilidad.
  */
 
 require('dotenv').config();
+const path = require('path');
+const express = require('express');
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { plugin: pvp } = require('mineflayer-pvp');
@@ -28,12 +37,17 @@ const MOVEMENT = (process.env.MOVEMENT || 'off').toLowerCase() === 'on';
 const AFK_INTERVAL = parseInt(process.env.AFK_INTERVAL || '30', 10) * 1000;
 const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY || '15', 10) * 1000;
 
-// Comportamiento del modo activo
-const FLEE_HEALTH = parseInt(process.env.FLEE_HEALTH || '8', 10); // corazones*2; huye si <= esto
-const DETECT_RANGE = parseInt(process.env.DETECT_RANGE || '16', 10); // radio para detectar mobs/objetos
-const ROAM_RADIUS = parseInt(process.env.ROAM_RADIUS || '16', 10); // radio para pasear
+// Puerto del panel web (Render lo inyecta como PORT).
+const WEB_PORT = parseInt(process.env.PORT || '8080', 10);
+const PANEL_TOKEN = process.env.PANEL_TOKEN || '';
 
-// Mobs considerados enemigos (además de la categoría "Hostile mobs" de minecraft-data)
+// Ajustes que se pueden cambiar EN CALIENTE desde el panel.
+const settings = {
+  fleeHealth: parseInt(process.env.FLEE_HEALTH || '8', 10),
+  detectRange: parseInt(process.env.DETECT_RANGE || '16', 10),
+  roamRadius: parseInt(process.env.ROAM_RADIUS || '16', 10),
+};
+
 const HOSTILE_NAMES = new Set([
   'slime', 'magma_cube', 'zombie', 'husk', 'drowned', 'zombie_villager',
   'skeleton', 'stray', 'wither_skeleton', 'bogged', 'spider', 'cave_spider',
@@ -43,12 +57,19 @@ const HOSTILE_NAMES = new Set([
   'warden', 'breeze',
 ]);
 
+// ----- Estado global compartido con el panel -----
+let currentBot = null;
+let paused = false;
+let combatEnabled = true;
+let currentState = 'desconectado';
+let lastMessage = '';
+const startedAt = Date.now();
+
 function log(msg) {
   console.log(`[AFK-BOT] ${new Date().toISOString()} ${msg}`);
 }
 
-// Blindaje: ningún error suelto debe tumbar el proceso. Así el bot NUNCA se
-// cae por un fallo inesperado; como mucho se reconecta.
+// Blindaje: ningún error suelto debe tumbar el proceso.
 process.on('uncaughtException', (err) => log(`uncaughtException (ignorado): ${err && err.message}`));
 process.on('unhandledRejection', (err) => log(`unhandledRejection (ignorado): ${err && err.message ? err.message : err}`));
 
@@ -75,6 +96,7 @@ function createBot() {
     auth: 'offline',
     hideErrors: false,
   });
+  currentBot = bot;
 
   if (MOVEMENT) {
     bot.loadPlugin(pathfinder);
@@ -92,6 +114,7 @@ function createBot() {
     if (reconnected) return;
     reconnected = true;
     stopTimers();
+    currentState = 'desconectado';
     log(`Reconectando en ${RECONNECT_DELAY / 1000}s (motivo: ${where})...`);
     setTimeout(createBot, RECONNECT_DELAY);
   }
@@ -101,6 +124,7 @@ function createBot() {
   bot.once('spawn', () => {
     if (!MOVEMENT) {
       bot.physicsEnabled = false;
+      currentState = 'estable';
       log('DENTRO (modo estable, sin movimiento). Conectado 24/7.');
       startArmSwing(bot);
       return;
@@ -109,33 +133,30 @@ function createBot() {
     // --- Modo activo ---
     try {
       const movements = new Movements(bot);
-      movements.canDig = false;           // no rompe bloques (no griefea)
-      movements.allow1by1towers = false;  // no hace torres
-      movements.allowParkour = false;     // sin saltos "raros" (anti-cheat)
-      movements.allowSprinting = false;   // sin correr -> movimiento suave, evita el kick
+      movements.canDig = false;
+      movements.allow1by1towers = false;
+      movements.allowParkour = false;
+      movements.allowSprinting = false;
       bot.pathfinder.setMovements(movements);
-      // El plugin de combate usa los mismos movimientos suaves.
       bot.pvp.movements = movements;
-      // Limita el cálculo de rutas para NO bloquear la CPU (Render Free = 0.1 CPU).
-      // Esto evita las desconexiones por "Timed out".
-      bot.pathfinder.thinkTimeout = 2000; // ms máximos por búsqueda de ruta
-      bot.pathfinder.tickTimeout = 20;    // ms máximos de cálculo por tick
+      bot.pathfinder.thinkTimeout = 2000;
+      bot.pathfinder.tickTimeout = 20;
     } catch (e) {
       log(`No se pudieron configurar movimientos: ${e.message}`);
     }
+    currentState = 'quieto';
     log('DENTRO (modo activo). Empiezo a patrullar en 3s.');
     setTimeout(() => startBrain(bot), 3000);
   });
 
   bot.on('death', () => {
-    // mineflayer reaparece solo tras morir; el bot NO abandona el servidor.
     log('El bot murió. Reaparecerá automáticamente y seguirá dentro.');
     bot.__state = 'idle';
     try { bot.pvp.stop(); } catch (e) { /* */ }
     try { bot.pathfinder.setGoal(null); } catch (e) { /* */ }
   });
 
-  bot.on('respawn', () => log('Reapareció. Retomando la patrulla.'));
+  bot.on('respawn', () => log('Reapareció. Retomando la actividad.'));
 
   bot.on('kicked', (reason, loggedIn) => log(`EXPULSADO (loggedIn=${loggedIn}): ${describeReason(reason)}`));
   bot.on('error', (err) => log(`Error: ${err.code || err.message}`));
@@ -159,7 +180,6 @@ function startBrain(bot) {
   bot.__state = 'idle';
   log('Comportamiento activo: patrulla, combate, huida y recogida de armas.');
 
-  // Cada 2s (no 1s) para bajar la carga de CPU y evitar timeouts en Render Free.
   bot.__brain = setInterval(() => {
     try { think(bot); } catch (e) { log(`think() error: ${e.message}`); }
   }, 2000);
@@ -188,7 +208,7 @@ function equipBestWeapon(bot) {
   const score = (n) => {
     const idx = rank.findIndex((r) => n.includes(r));
     const base = idx === -1 ? 99 : idx;
-    return base + (n.includes('sword') ? 0 : 0.5); // prefiere espada sobre hacha a igualdad
+    return base + (n.includes('sword') ? 0 : 0.5);
   };
   weapons.sort((a, b) => score(a.name) - score(b.name));
   const best = weapons[0];
@@ -214,27 +234,39 @@ function fleeFrom(bot, threat) {
 
 function roam(bot) {
   const p = bot.entity.position;
-  const x = Math.floor(p.x + (Math.random() * 2 - 1) * ROAM_RADIUS);
-  const z = Math.floor(p.z + (Math.random() * 2 - 1) * ROAM_RADIUS);
+  const x = Math.floor(p.x + (Math.random() * 2 - 1) * settings.roamRadius);
+  const z = Math.floor(p.z + (Math.random() * 2 - 1) * settings.roamRadius);
   bot.pathfinder.setGoal(new goals.GoalNear(x, Math.floor(p.y), z, 1));
 }
 
 function think(bot) {
   if (!bot.entity) return;
-  const health = typeof bot.health === 'number' ? bot.health : 20;
-  const threat = bot.nearestEntity((e) => isHostile(bot, e) && dist(bot, e) <= DETECT_RANGE);
 
-  // 1) HUIR si vida baja
-  if (health <= FLEE_HEALTH) {
+  // Pausado desde el panel: se queda quieto.
+  if (paused) {
+    try { bot.pvp.stop(); } catch (e) { /* */ }
+    try { bot.pathfinder.setGoal(null); } catch (e) { /* */ }
+    currentState = 'pausado';
+    return;
+  }
+
+  const health = typeof bot.health === 'number' ? bot.health : 20;
+  const threat = combatEnabled
+    ? bot.nearestEntity((e) => isHostile(bot, e) && dist(bot, e) <= settings.detectRange)
+    : null;
+
+  // 1) HUIR
+  if (health <= settings.fleeHealth) {
     if (bot.__state !== 'flee') {
       log(`Vida baja (${health}). Huyendo...`);
       bot.__state = 'flee';
     }
+    currentState = 'huida';
     fleeFrom(bot, threat);
     return;
   }
 
-  // 2) LUCHAR contra el mob enemigo más cercano
+  // 2) LUCHAR
   if (threat) {
     equipBestWeapon(bot);
     if (bot.pvp.target !== threat) {
@@ -242,6 +274,7 @@ function think(bot) {
       bot.__state = 'fight';
       bot.pvp.attack(threat);
     }
+    currentState = 'combate';
     return;
   }
   if (bot.__state === 'fight') {
@@ -249,24 +282,156 @@ function think(bot) {
     bot.__state = 'idle';
   }
 
-  // 3) RECOGER objetos/armas cercanos (caminar encima los recoge)
-  const drop = bot.nearestEntity((e) => isItemDrop(e) && dist(bot, e) <= DETECT_RANGE);
+  // 3) RECOGER objetos
+  const drop = bot.nearestEntity((e) => isItemDrop(e) && dist(bot, e) <= settings.detectRange);
   if (drop) {
     if (bot.__state !== 'collect') {
       log('Objeto en el suelo: voy a recogerlo.');
       bot.__state = 'collect';
     }
+    currentState = 'recogiendo';
     bot.pathfinder.setGoal(new goals.GoalNear(drop.position.x, drop.position.y, drop.position.z, 0));
     return;
   }
 
-  // 4) PATRULLAR: si no está caminando, elige un nuevo destino
+  // 4) PATRULLAR
   const moving = bot.pathfinder.isMoving && bot.pathfinder.isMoving();
   if (bot.__state !== 'roam' || !moving) {
     bot.__state = 'roam';
+    currentState = 'patrulla';
     roam(bot);
-    equipBestWeapon(bot); // por si recogió un arma mientras paseaba
+    equipBestWeapon(bot);
   }
 }
 
+// =================== PANEL WEB ===================
+
+function buildStatus() {
+  const s = {
+    online: false,
+    username: USERNAME,
+    server: `${HOST}:${PORT}`,
+    version: RAW_VERSION,
+    movement: MOVEMENT ? 'on' : 'off',
+    state: currentState,
+    paused,
+    combat: combatEnabled,
+    health: null,
+    maxHealth: 20,
+    food: null,
+    position: null,
+    dimension: null,
+    players: [],
+    lastMessage,
+    settings,
+    uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+  };
+  const bot = currentBot;
+  try {
+    if (bot && bot.entity) {
+      s.online = true;
+      s.health = Math.round((bot.health || 0) * 10) / 10;
+      s.food = Math.round(bot.food || 0);
+      const p = bot.entity.position;
+      s.position = { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) };
+      s.dimension = (bot.game && bot.game.dimension) || null;
+      s.players = Object.keys(bot.players || {}).sort();
+    }
+  } catch (e) { /* estado incompleto durante reconexión */ }
+  return s;
+}
+
+function handleAction(action, value) {
+  const bot = currentBot;
+  switch (action) {
+    case 'say':
+      if (bot && value) { bot.chat(String(value).slice(0, 240)); return 'Mensaje enviado'; }
+      return 'Sin mensaje o bot desconectado';
+    case 'pause':
+      paused = true; return 'Bot pausado';
+    case 'resume':
+      paused = false; return 'Bot reanudado';
+    case 'combat_on':
+      combatEnabled = true; return 'Combate activado';
+    case 'combat_off':
+      combatEnabled = false;
+      if (bot && bot.pvp) { try { bot.pvp.stop(); } catch (e) { /* */ } }
+      return 'Combate desactivado';
+    case 'jump':
+      if (bot) {
+        try {
+          bot.setControlState('jump', true);
+          setTimeout(() => { try { bot.setControlState('jump', false); } catch (e) { /* */ } }, 500);
+        } catch (e) { /* */ }
+      }
+      return 'Salto';
+    case 'goto_player': {
+      if (!MOVEMENT) return 'Requiere modo movimiento (MOVEMENT=on)';
+      if (!bot || !bot.entity) return 'Bot desconectado';
+      const pl = bot.players[value];
+      if (!pl || !pl.entity) return `No veo al jugador "${value}"`;
+      paused = false;
+      try { bot.pathfinder.setGoal(new goals.GoalFollow(pl.entity, 2), true); } catch (e) { return 'Error al ir'; }
+      return `Yendo hacia ${value}`;
+    }
+    case 'reconnect':
+      if (bot) { try { bot.quit('panel: reconectar'); } catch (e) { /* */ } }
+      return 'Reconectando...';
+    case 'set_flee': {
+      const v = parseInt(value, 10);
+      if (!isNaN(v) && v >= 0 && v <= 20) { settings.fleeHealth = v; return `Huir con vida <= ${v}`; }
+      return 'Valor inválido (0-20)';
+    }
+    case 'set_detect': {
+      const v = parseInt(value, 10);
+      if (!isNaN(v) && v >= 4 && v <= 64) { settings.detectRange = v; return `Rango de detección = ${v}`; }
+      return 'Valor inválido (4-64)';
+    }
+    case 'set_roam': {
+      const v = parseInt(value, 10);
+      if (!isNaN(v) && v >= 4 && v <= 64) { settings.roamRadius = v; return `Radio de patrulla = ${v}`; }
+      return 'Valor inválido (4-64)';
+    }
+    default:
+      return 'Acción desconocida';
+  }
+}
+
+function startPanel() {
+  const app = express();
+  app.use(express.json());
+
+  function requireToken(req, res, next) {
+    if (!PANEL_TOKEN) return next(); // sin token configurado -> abierto
+    const t = req.get('x-panel-token') || (req.body && req.body.token) || req.query.token;
+    if (t === PANEL_TOKEN) return next();
+    return res.status(401).json({ ok: false, error: 'Token inválido' });
+  }
+
+  app.get('/health', (req, res) => res.json({ ok: true, state: currentState }));
+
+  app.post('/api/login', (req, res) => {
+    const t = (req.body && req.body.token) || '';
+    if (!PANEL_TOKEN || t === PANEL_TOKEN) return res.json({ ok: true });
+    return res.status(401).json({ ok: false, error: 'Token inválido' });
+  });
+
+  app.get('/api/status', requireToken, (req, res) => res.json(buildStatus()));
+
+  app.post('/api/action', requireToken, (req, res) => {
+    const { action, value } = req.body || {};
+    const msg = handleAction(action, value);
+    log(`[PANEL] acción "${action}" -> ${msg}`);
+    res.json({ ok: true, message: msg, status: buildStatus() });
+  });
+
+  app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'panel.html')));
+
+  app.listen(WEB_PORT, '0.0.0.0', () => {
+    log(`Panel web escuchando en el puerto ${WEB_PORT}.`);
+    if (!PANEL_TOKEN) log('AVISO: PANEL_TOKEN no definido -> el panel está ABIERTO (sin contraseña).');
+  });
+}
+
+startPanel();
 createBot();

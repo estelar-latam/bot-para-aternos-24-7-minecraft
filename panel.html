@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Panel · Bot Aternos 24/7</title>
+<style>
+  :root {
+    --bg1: #1b2a4a; --bg2: #0f1b30; --card: #24365c; --card2: #2c4270;
+    --accent: #ffd23f; --ok: #2ecc71; --bad: #e74c3c; --warn: #f39c12;
+    --text: #eaf0ff; --muted: #9fb0d6; --line: #3a5285;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body {
+    min-height: 100vh; color: var(--text);
+    background: radial-gradient(circle at 30% 0%, #24427a, var(--bg2) 60%);
+    padding: 16px; display: flex; justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 920px; }
+  header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+    background: linear-gradient(180deg, var(--card2), var(--card));
+    border: 2px solid var(--line); border-radius: 18px; padding: 14px 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  header .logo { font-size: 34px; }
+  header h1 { font-size: 20px; font-weight: 800; letter-spacing: .3px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .pill { margin-left: auto; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; gap: 7px; border: 2px solid var(--line); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: linear-gradient(180deg, var(--card2), var(--card));
+    border: 2px solid var(--line); border-radius: 18px; padding: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 12px; }
+
+  .stat { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px dashed rgba(255,255,255,.08); font-size: 14px; }
+  .stat:last-child { border-bottom: 0; }
+  .stat .k { color: var(--muted); }
+  .stat .v { font-weight: 700; }
+  .state-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; text-transform: uppercase; background: #37507e; }
+  .state-badge.combate { background: #a63a3a; }
+  .state-badge.huida { background: #b6771e; }
+  .state-badge.patrulla { background: #2c7a4b; }
+  .state-badge.pausado { background: #555; }
+  .state-badge.desconectado { background: #7a2c2c; }
+  .hearts { letter-spacing: 1px; }
+
+  .btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 420px) { .btns { grid-template-columns: repeat(2, 1fr); } }
+  button.gm {
+    border: 0; border-radius: 14px; padding: 12px 6px; cursor: pointer; color: #1a1a1a;
+    font-weight: 800; font-size: 12.5px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+    box-shadow: 0 4px 0 rgba(0,0,0,.35); transition: transform .06s, box-shadow .06s;
+  }
+  button.gm:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+  button.gm .ico { font-size: 22px; }
+  .b-blue { background: linear-gradient(180deg,#5aa8ff,#3d7fe0); color: #fff; }
+  .b-green { background: linear-gradient(180deg,#4be07a,#25b257); color: #073d1c; }
+  .b-red { background: linear-gradient(180deg,#ff6b6b,#e0453d); color: #fff; }
+  .b-yellow { background: linear-gradient(180deg,#ffd23f,#f0b400); }
+  .b-purple { background: linear-gradient(180deg,#b98bff,#8b5cf6); color: #fff; }
+  .b-gray { background: linear-gradient(180deg,#8aa0c8,#5f76a3); color: #fff; }
+
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  input[type=text], input[type=password], input[type=number] {
+    flex: 1; background: #17233d; border: 2px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font-size: 14px; min-width: 0;
+  }
+  .send { background: var(--accent); color: #1a1a1a; border: 0; border-radius: 10px; padding: 0 16px; font-weight: 800; cursor: pointer; }
+
+  .players { display: flex; flex-direction: column; gap: 8px; max-height: 230px; overflow-y: auto; }
+  .player { display: flex; align-items: center; gap: 10px; background: #1c2c4d; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  .player .av { width: 30px; height: 30px; border-radius: 8px; background: #3a5285; display: grid; place-items: center; font-size: 16px; }
+  .player .nm { font-weight: 700; font-size: 14px; }
+  .player.me .nm { color: var(--accent); }
+  .player .go { margin-left: auto; background: #3d7fe0; color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
+
+  .setrow { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+  .setrow label { flex: 1; font-size: 13px; color: var(--muted); }
+  .setrow input { max-width: 90px; }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(30px); opacity: 0;
+    background: #101a2e; border: 2px solid var(--accent); color: var(--text); padding: 10px 18px; border-radius: 12px;
+    font-weight: 700; transition: .25s; z-index: 50; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* Login */
+  .gate { position: fixed; inset: 0; background: rgba(6,12,24,.92); display: grid; place-items: center; z-index: 100; padding: 20px; }
+  .gate .box { background: linear-gradient(180deg, var(--card2), var(--card)); border: 2px solid var(--line);
+    border-radius: 18px; padding: 26px; width: 100%; max-width: 360px; text-align: center; }
+  .gate .box .lock { font-size: 40px; }
+  .gate .box h3 { margin: 8px 0 4px; }
+  .gate .box p { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .gate .box .err { color: var(--bad); font-size: 13px; min-height: 18px; margin-top: 8px; }
+  .footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
+  .footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🤖</div>
+    <div>
+      <h1>Panel del Bot · Aternos 24/7</h1>
+      <div class="sub" id="serverName">—</div>
+    </div>
+    <div class="pill"><span class="dot" id="dot"></span><span id="onlineTxt">…</span></div>
+  </header>
+
+  <div class="grid">
+    <!-- Estado -->
+    <div class="card">
+      <h2>📊 Estado del bot</h2>
+      <div class="stat"><span class="k">Actividad</span><span class="v"><span class="state-badge" id="stState">—</span></span></div>
+      <div class="stat"><span class="k">Nombre</span><span class="v" id="stUser">—</span></div>
+      <div class="stat"><span class="k">Vida</span><span class="v hearts" id="stHealth">—</span></div>
+      <div class="stat"><span class="k">Comida</span><span class="v" id="stFood">—</span></div>
+      <div class="stat"><span class="k">Posición</span><span class="v" id="stPos">—</span></div>
+      <div class="stat"><span class="k">Dimensión</span><span class="v" id="stDim">—</span></div>
+      <div class="stat"><span class="k">Movimiento</span><span class="v" id="stMove">—</span></div>
+      <div class="stat"><span class="k">Conectado</span><span class="v" id="stUptime">—</span></div>
+    </div>
+
+    <!-- Controles -->
+    <div class="card">
+      <h2>🎮 Controles</h2>
+      <div class="btns">
+        <button class="gm b-yellow" id="btnPause"><span class="ico">⏸️</span><span id="btnPauseTxt">Pausar</span></button>
+        <button class="gm b-red" id="btnCombat"><span class="ico">⚔️</span><span id="btnCombatTxt">Combate</span></button>
+        <button class="gm b-purple" onclick="act('jump')"><span class="ico">⬆️</span>Saltar</button>
+        <button class="gm b-green" onclick="act('resume')"><span class="ico">▶️</span>Reanudar</button>
+        <button class="gm b-blue" onclick="act('reconnect')"><span class="ico">🔄</span>Reconectar</button>
+        <button class="gm b-gray" onclick="refresh()"><span class="ico">📡</span>Actualizar</button>
+      </div>
+      <div class="row">
+        <input type="text" id="sayInput" placeholder="Escribe algo para que lo diga…" maxlength="240" />
+        <button class="send" onclick="sendSay()">Decir 💬</button>
+      </div>
+    </div>
+
+    <!-- Jugadores -->
+    <div class="card">
+      <h2>👥 Jugadores en el servidor</h2>
+      <div class="players" id="players"><div class="empty">—</div></div>
+    </div>
+
+    <!-- Ajustes -->
+    <div class="card">
+      <h2>⚙️ Ajustes en caliente</h2>
+      <div class="setrow"><label>❤️ Huir si la vida es ≤ (0-20)</label><input type="number" id="setFlee" min="0" max="20" /><button class="send" onclick="setVal('set_flee','setFlee')">OK</button></div>
+      <div class="setrow"><label>🔎 Rango de detección (4-64)</label><input type="number" id="setDetect" min="4" max="64" /><button class="send" onclick="setVal('set_detect','setDetect')">OK</button></div>
+      <div class="setrow"><label>🧭 Radio de patrulla (4-64)</label><input type="number" id="setRoam" min="4" max="64" /><button class="send" onclick="setVal('set_roam','setRoam')">OK</button></div>
+      <p style="color:var(--muted);font-size:12px;margin-top:6px;">Los cambios son inmediatos. Se reinician si el servicio se reinicia (para permanentes, usa las variables en Render).</p>
+    </div>
+  </div>
+
+  <div class="footer">Bot Aternos 24/7 · <a href="https://github.com/estelar-latam/bot-para-aternos-24-7-minecraft" target="_blank">Repositorio</a></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Login -->
+<div class="gate" id="gate" style="display:none;">
+  <div class="box">
+    <div class="lock">🔒</div>
+    <h3>Panel protegido</h3>
+    <p>Introduce la contraseña del panel para continuar.</p>
+    <input type="password" id="tokenInput" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()" />
+    <div class="err" id="loginErr"></div>
+    <button class="send" style="margin-top:12px;width:100%;padding:12px;" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<script>
+  let TOKEN = localStorage.getItem('panelToken') || '';
+  const $ = (id) => document.getElementById(id);
+
+  function headers() {
+    const h = { 'Content-Type': 'application/json' };
+    if (TOKEN) h['x-panel-token'] = TOKEN;
+    return h;
+  }
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(window.__tt); window.__tt = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch('/api/status', { headers: headers() });
+      if (r.status === 401) { showGate(); return; }
+      const s = await r.json();
+      render(s);
+    } catch (e) { /* red */ }
+  }
+
+  function hearts(h) {
+    if (h == null) return '—';
+    const full = Math.round(h / 2);
+    return '❤️'.repeat(full) + '🖤'.repeat(Math.max(0, 10 - full)) + `  (${h})`;
+  }
+  function fmtUptime(s) {
+    if (s == null) return '—';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function render(s) {
+    $('serverName').textContent = s.server + '  ·  MC ' + s.version;
+    $('dot').classList.toggle('on', s.online);
+    $('onlineTxt').textContent = s.online ? 'Conectado' : 'Desconectado';
+    const badge = $('stState'); badge.textContent = s.state; badge.className = 'state-badge ' + (s.state || '');
+    $('stUser').textContent = s.username;
+    $('stHealth').textContent = hearts(s.health);
+    $('stFood').textContent = s.food == null ? '—' : (s.food + '/20');
+    $('stPos').textContent = s.position ? `${s.position.x}, ${s.position.y}, ${s.position.z}` : '—';
+    $('stDim').textContent = s.dimension || '—';
+    $('stMove').textContent = s.movement === 'on' ? 'Activo' : 'Estable';
+    $('stUptime').textContent = fmtUptime(s.uptimeSeconds);
+
+    $('btnPauseTxt').textContent = s.paused ? 'Pausado' : 'Pausar';
+    $('btnPause').classList.toggle('b-green', s.paused);
+    $('btnCombatTxt').textContent = s.combat ? 'Combate ON' : 'Combate OFF';
+    $('btnCombat').style.filter = s.combat ? 'none' : 'grayscale(.6)';
+
+    if (document.activeElement.tagName !== 'INPUT') {
+      $('setFlee').value = s.settings.fleeHealth;
+      $('setDetect').value = s.settings.detectRange;
+      $('setRoam').value = s.settings.roamRadius;
+    }
+
+    const box = $('players');
+    if (!s.players || !s.players.length) { box.innerHTML = '<div class="empty">No hay jugadores conectados</div>'; return; }
+    box.innerHTML = s.players.map((n) => {
+      const me = n === s.username;
+      return `<div class="player ${me ? 'me' : ''}"><div class="av">${me ? '🤖' : '🧑'}</div>`
+        + `<div class="nm">${n}${me ? ' (bot)' : ''}</div>`
+        + (me ? '' : `<button class="go" onclick="act('goto_player','${n}')">Ir 🧭</button>`) + `</div>`;
+    }).join('');
+  }
+
+  async function act(action, value) {
+    try {
+      const r = await fetch('/api/action', { method: 'POST', headers: headers(), body: JSON.stringify({ action, value, token: TOKEN }) });
+      if (r.status === 401) { showGate(); return; }
+      const d = await r.json();
+      toast(d.message || 'Hecho');
+      if (d.status) render(d.status);
+    } catch (e) { toast('Error de red'); }
+  }
+
+  // Toggles
+  let paused = false, combat = true;
+  $('btnPause').onclick = () => act(paused ? 'resume' : 'pause').then(() => { paused = !paused; });
+  $('btnCombat').onclick = () => act(combat ? 'combat_off' : 'combat_on').then(() => { combat = !combat; });
+
+  function sendSay() { const v = $('sayInput').value.trim(); if (v) { act('say', v); $('sayInput').value = ''; } }
+  function setVal(action, id) { act(action, $(id).value); }
+
+  // Login
+  function showGate() { $('gate').style.display = 'grid'; }
+  async function doLogin() {
+    const t = $('tokenInput').value;
+    try {
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) });
+      const d = await r.json();
+      if (d.ok) { TOKEN = t; localStorage.setItem('panelToken', t); $('gate').style.display = 'none'; $('loginErr').textContent = ''; refresh(); }
+      else { $('loginErr').textContent = 'Contraseña incorrecta'; }
+    } catch (e) { $('loginErr').textContent = 'Error de conexión'; }
+  }
+
+  refresh();
+  setInterval(refresh, 3000);
+</script>
+</body>
+</html>

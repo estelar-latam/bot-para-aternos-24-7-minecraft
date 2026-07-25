@@ -2,7 +2,9 @@
 
 Inicia sesión en aternos.org con python-aternos, revisa el estado del
 servidor cada CHECK_INTERVAL segundos y, si está apagado, lo enciende.
-También arranca el servidor de keep-alive (para UptimeRobot).
+
+La web (panel de control + /health para UptimeRobot) la sirve ahora el bot
+de Node (afk_bot.js), por eso aquí ya NO se arranca ningún servidor web.
 
 AVISO: mantener un servidor de Aternos encendido 24/7 con automatización
 va contra los Términos de Servicio de Aternos y puede provocar el baneo de
@@ -10,12 +12,10 @@ tu cuenta. Úsalo bajo tu propia responsabilidad.
 """
 
 import time
-import traceback
 
 from python_aternos import Client
 
 import config
-import keep_alive
 
 # Estados en los que NO hay que hacer nada (el servidor ya está arriba o subiendo).
 BUSY_STATES = {"online", "starting", "loading", "preparing", "saving", "queueing", "in_queue"}
@@ -68,7 +68,6 @@ def monitor_loop():
 
             srv.fetch()  # refresca el estado desde Aternos
             status = (srv.status or "").lower()
-            keep_alive.set_status(status)
             print(f"[ATERNOS] Estado actual: {status or 'desconocido'}", flush=True)
 
             if status == "offline" or status == "crashed":
@@ -93,7 +92,6 @@ def monitor_loop():
             # ya mantiene el servidor encendido 24/7, así que esto NO es crítico.
             # Registramos un mensaje corto (sin traceback) para no ensuciar los logs.
             srv = None
-            keep_alive.set_status("error")
             print(
                 f"[ATERNOS] Auto-encendido no disponible ({type(err).__name__}). "
                 f"El bot AFK mantiene el server encendido. Reintento en {backoff}s.",
@@ -104,7 +102,6 @@ def monitor_loop():
 
 
 def main():
-    keep_alive.start_in_background()
     monitor_loop()
 
 

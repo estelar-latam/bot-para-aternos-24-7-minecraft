@@ -137,6 +137,23 @@ Este repo incluye `Dockerfile` y `render.yaml`, así que Render lo despliega sol
 
 ---
 
+## 🎮 Panel de control web
+
+El bot incluye un **panel de control** en la misma URL pública (la de Render). Ábrela en el navegador:
+```
+https://tu-servicio.onrender.com
+```
+
+Desde el panel puedes:
+- 📊 **Ver el estado**: vida, comida, posición, actividad (patrulla/combate/huida), tiempo conectado y jugadores en el servidor.
+- 🎮 **Controlar**: Pausar/Reanudar, Combate ON/OFF, Saltar, Reconectar.
+- 💬 **Chat y movimiento**: escribir un mensaje para que el bot lo diga, o mandarlo a un jugador (botón "Ir").
+- ⚙️ **Ajustes en caliente**: cambiar cuándo huye, el rango de detección y el radio de patrulla sin tocar Render.
+
+**Contraseña:** define la variable `PANEL_TOKEN` en Render con una clave fuerte. El panel la pedirá para ver/controlar el bot. Si la dejas vacía, el panel queda **abierto** (cualquiera con la URL puede controlarlo).
+
+> El mismo servidor web sirve `/health` para UptimeRobot, así que tu monitor sigue funcionando igual.
+
 ## Solución de problemas
 
 | Problema | Causa probable | Solución |
