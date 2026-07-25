@@ -104,9 +104,13 @@ function createBot() {
     // --- Modo activo ---
     try {
       const movements = new Movements(bot);
-      movements.canDig = false;          // no rompe bloques (no griefea)
-      movements.allow1by1towers = false; // no hace torres
+      movements.canDig = false;           // no rompe bloques (no griefea)
+      movements.allow1by1towers = false;  // no hace torres
+      movements.allowParkour = false;     // sin saltos "raros" (anti-cheat)
+      movements.allowSprinting = false;   // sin correr -> movimiento suave, evita el kick
       bot.pathfinder.setMovements(movements);
+      // El plugin de combate usa los mismos movimientos suaves.
+      bot.pvp.movements = movements;
     } catch (e) {
       log(`No se pudieron configurar movimientos: ${e.message}`);
     }
@@ -153,7 +157,7 @@ function isHostile(bot, e) {
 }
 
 function isItemDrop(e) {
-  return e && (e.name === 'item' || e.objectType === 'Item');
+  return e && e.name === 'item';
 }
 
 function dist(bot, e) {
