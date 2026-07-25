@@ -1,10 +1,19 @@
 /**
  * Bot AFK con mineflayer.
  *
- * Se conecta al servidor de Minecraft, se MANTIENE dentro y se mueve
- * (camina, gira y salta) de forma periódica para que Aternos no lo apague
- * por inactividad. Se reconecta solo si se cae o si el servidor todavía no
- * está online. Registra el motivo exacto de cada desconexión para diagnóstico.
+ * Se conecta al servidor y se MANTIENE dentro para que Aternos no lo apague
+ * (a Aternos le basta con que haya 1 jugador conectado; no hace falta que se
+ * mueva). Se reconecta solo y registra el motivo de cada desconexión.
+ *
+ * MODOS (variable de entorno MOVEMENT):
+ *   - "off" (por defecto): modo ESTABLE. Desactiva la física para NO enviar
+ *     paquetes de movimiento. Esto evita el kick "Invalid move player packet
+ *     received" que ocurre en versiones muy nuevas de Minecraft (ej. 26.2),
+ *     donde mineflayer aún no traduce bien el movimiento. El bot solo mueve
+ *     el brazo de vez en cuando. Es la opción fiable para 24/7.
+ *   - "on": intenta caminar/girar/saltar. Solo úsalo si el servidor corre una
+ *     versión que mineflayer soporta bien (ej. 1.20.x / 1.21.x). En versiones
+ *     nuevas provoca el kick por movimiento.
  *
  * AVISO: los bots AFK van contra los Términos de Servicio de Aternos y pueden
  * provocar el baneo de tu cuenta. Úsalo bajo tu propia responsabilidad.
@@ -19,6 +28,9 @@ const USERNAME = process.env.BOT_USERNAME || 'AFKBot';
 const RAW_VERSION = process.env.MC_VERSION || 'auto';
 // mineflayer usa version:false para autodetectar la versión del servidor.
 const VERSION = RAW_VERSION.toLowerCase() === 'auto' ? false : RAW_VERSION;
+
+// Modo de movimiento: "off" (estable, por defecto) u "on" (caminar/saltar).
+const MOVEMENT = (process.env.MOVEMENT || 'off').toLowerCase() === 'on';
 
 const AFK_INTERVAL = parseInt(process.env.AFK_INTERVAL || '30', 10) * 1000;
 const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY || '15', 10) * 1000;
@@ -43,7 +55,7 @@ function describeReason(reason) {
 }
 
 function createBot() {
-  log(`Conectando a ${HOST}:${PORT} como "${USERNAME}" (version: ${VERSION || 'auto'})...`);
+  log(`Conectando a ${HOST}:${PORT} como "${USERNAME}" (version: ${VERSION || 'auto'}, movimiento: ${MOVEMENT ? 'on' : 'off'})...`);
 
   let reconnected = false;
   const bot = mineflayer.createBot({
@@ -55,22 +67,17 @@ function createBot() {
     hideErrors: false,
   });
 
-  function stopMovement() {
+  function stopTimers() {
     if (bot.__afkTimer) {
       clearInterval(bot.__afkTimer);
       bot.__afkTimer = null;
-    }
-    try {
-      bot.clearControlStates();
-    } catch (e) {
-      /* el bot ya está desconectado */
     }
   }
 
   function scheduleReconnect(where) {
     if (reconnected) return; // evita reconectar dos veces por el mismo corte
     reconnected = true;
-    stopMovement();
+    stopTimers();
     log(`Reconectando en ${RECONNECT_DELAY / 1000}s (motivo: ${where})...`);
     setTimeout(createBot, RECONNECT_DELAY);
   }
@@ -80,10 +87,16 @@ function createBot() {
   });
 
   bot.once('spawn', () => {
-    log('Bot DENTRO del servidor. Espero 5s y empiezo a moverme.');
-    // Pequeña espera: entrar y moverse en el mismo instante a veces provoca
-    // kicks por parte de plugins anti-cheat/anti-bot.
-    setTimeout(() => startAntiAfk(bot), 5000);
+    if (!MOVEMENT) {
+      // Clave: apagar la física evita que mineflayer envíe paquetes de
+      // movimiento que las versiones nuevas rechazan ("Invalid move packet").
+      bot.physicsEnabled = false;
+      log('DENTRO del servidor (modo estable, sin movimiento). El bot permanecerá conectado 24/7.');
+      startArmSwing(bot);
+    } else {
+      log('DENTRO del servidor (modo movimiento). Empiezo a moverme en 5s.');
+      setTimeout(() => startAntiAfk(bot), 5000);
+    }
   });
 
   bot.on('kicked', (reason, loggedIn) => {
@@ -101,23 +114,32 @@ function createBot() {
   });
 }
 
+// Modo estable: solo mueve el brazo (paquete de animación, NO de movimiento).
+function startArmSwing(bot) {
+  if (bot.__afkTimer) return;
+  bot.__afkTimer = setInterval(() => {
+    try {
+      bot.swingArm('right');
+    } catch (e) {
+      /* desconectado */
+    }
+  }, AFK_INTERVAL);
+}
+
+// Modo movimiento: camina, gira y salta (solo en versiones compatibles).
 function startAntiAfk(bot) {
-  if (bot.__afkTimer) return; // no apilar timers
+  if (bot.__afkTimer) return;
   const DIRECTIONS = ['forward', 'back', 'left', 'right'];
-  log('Anti-AFK activo: caminando, girando y saltando periódicamente.');
+  log('Anti-AFK activo: caminando, girando y saltando.');
 
   bot.__afkTimer = setInterval(() => {
     try {
-      // 1) Mira en una dirección aleatoria (giro suave).
       const yaw = Math.random() * Math.PI * 2;
       const pitch = (Math.random() - 0.5) * 0.6;
       bot.look(yaw, pitch, false);
 
-      // 2) Camina en una dirección aleatoria durante ~1.2s.
       const dir = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
       bot.setControlState(dir, true);
-
-      // 3) A veces salta mientras camina.
       const jump = Math.random() < 0.5;
       if (jump) bot.setControlState('jump', true);
 
