@@ -113,13 +113,16 @@ En los logs deberías ver la secuencia:
 3. Pulsa **Run** (usa `start.sh` automáticamente).
 4. Copia la **URL pública** que te da Replit (algo como `https://tu-repl.usuario.repl.co`).
 
-### Opción B — Render
+### Opción B — Render (recomendada, con Docker)
 
-1. Crea un **Web Service** apuntando a tu repo de GitHub.
-2. Build command: `pip install -r requirements.txt && npm install`
-3. Start command: `bash start.sh`
-4. Añade las variables de entorno en **Environment**.
-5. Copia la URL pública `https://tu-servicio.onrender.com`.
+Este repo incluye `Dockerfile` y `render.yaml`, así que Render lo despliega solo:
+
+1. Entra en [render.com](https://render.com) → **New +** → **Web Service** → conecta este repo de GitHub.
+2. Render detecta el `render.yaml` (runtime **Docker**, plan **Free**). Acepta.
+3. En **Environment** rellena `ATERNOS_USER` y `ATERNOS_PASSWORD` (las demás ya vienen con valor por defecto).
+4. Deploy. Cuando termine, copia la **URL pública**: `https://tu-servicio.onrender.com`.
+
+> El plan free de Render duerme el servicio tras ~15 min sin tráfico. Por eso configuras UptimeRobot (siguiente paso): sus pings lo mantienen despierto.
 
 ### Configurar UptimeRobot (mantiene el host despierto)
 

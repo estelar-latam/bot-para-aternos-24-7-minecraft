@@ -1,0 +1,35 @@
+# Despliegue en Render (https://render.com) con Docker.
+# Al conectar este repo, Render lee este archivo automáticamente.
+# Las variables marcadas con sync:false se rellenan a mano en el panel
+# (para no exponer credenciales en el repo).
+services:
+  - type: web
+    name: bot-aternos-24-7
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: ATERNOS_USER
+        sync: false
+      - key: ATERNOS_PASSWORD
+        sync: false
+      - key: ATERNOS_SERVER
+        value: "0"
+      - key: SERVER_HOST
+        value: realityapp.aternos.me
+      - key: SERVER_PORT
+        value: "40706"
+      - key: MC_VERSION
+        value: auto
+      - key: BOT_USERNAME
+        value: AFKBot
+      - key: CHECK_INTERVAL
+        value: "60"
+      - key: AFK_INTERVAL
+        value: "30"
+      - key: RECONNECT_DELAY
+        value: "15"
+      - key: PORT
+        value: "8080"
