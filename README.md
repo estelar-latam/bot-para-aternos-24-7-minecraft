@@ -64,6 +64,7 @@ Servidor de ejemplo configurado: `realityapp.aternos.me:40706` (PaperMC).
    | `SERVER_HOST` / `SERVER_PORT` | `realityapp.aternos.me` / `40706`. |
    | `MC_VERSION` | Versión **real** de Minecraft de tu Paper (ej. `1.21.4`) o `auto`. |
    | `BOT_USERNAME` | Nombre del bot dentro del juego. |
+   | `MOVEMENT` | `off` = estable, no se mueve (recomendado, obligatorio en MC 26.2). `on` = camina/salta (solo versiones 1.20.x/1.21.x). |
    | `CHECK_INTERVAL` | Cada cuántos segundos se revisa el estado en Aternos. |
    | `PORT` | Puerto del endpoint de keep-alive. |
 
@@ -143,6 +144,7 @@ Este repo incluye `Dockerfile` y `render.yaml`, así que Render lo despliega sol
 | El login de Aternos falla | Aternos cambió su web / Cloudflare | `pip install --upgrade python-aternos` |
 | Pide verificación / 2FA | Cuenta con 2FA activo | Desactiva 2FA o usa una cuenta sin él |
 | El bot AFK no entra | El servidor aún no está `online` | Es normal; se reintenta solo cada pocos segundos |
+| El bot entra y sale en bucle (`Invalid move player packet received`) | Versión muy nueva (ej. 26.2) que rechaza el movimiento de mineflayer | Deja `MOVEMENT=off` (el bot se queda quieto pero conectado). El movimiento solo funciona en 1.20.x/1.21.x |
 | `Unsupported version` en mineflayer | `MC_VERSION` incorrecta | Pon la versión real de MC o `auto` |
 | El host se sigue durmiendo | UptimeRobot mal configurado | Revisa que la URL `/health` responde 200 |
 
