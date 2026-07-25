@@ -47,6 +47,11 @@ function log(msg) {
   console.log(`[AFK-BOT] ${new Date().toISOString()} ${msg}`);
 }
 
+// Blindaje: ningún error suelto debe tumbar el proceso. Así el bot NUNCA se
+// cae por un fallo inesperado; como mucho se reconecta.
+process.on('uncaughtException', (err) => log(`uncaughtException (ignorado): ${err && err.message}`));
+process.on('unhandledRejection', (err) => log(`unhandledRejection (ignorado): ${err && err.message ? err.message : err}`));
+
 function describeReason(reason) {
   if (!reason) return 'sin motivo';
   try {
@@ -111,6 +116,10 @@ function createBot() {
       bot.pathfinder.setMovements(movements);
       // El plugin de combate usa los mismos movimientos suaves.
       bot.pvp.movements = movements;
+      // Limita el cálculo de rutas para NO bloquear la CPU (Render Free = 0.1 CPU).
+      // Esto evita las desconexiones por "Timed out".
+      bot.pathfinder.thinkTimeout = 2000; // ms máximos por búsqueda de ruta
+      bot.pathfinder.tickTimeout = 20;    // ms máximos de cálculo por tick
     } catch (e) {
       log(`No se pudieron configurar movimientos: ${e.message}`);
     }
@@ -119,9 +128,14 @@ function createBot() {
   });
 
   bot.on('death', () => {
-    log('El bot murió. Reapareciendo...');
+    // mineflayer reaparece solo tras morir; el bot NO abandona el servidor.
+    log('El bot murió. Reaparecerá automáticamente y seguirá dentro.');
     bot.__state = 'idle';
+    try { bot.pvp.stop(); } catch (e) { /* */ }
+    try { bot.pathfinder.setGoal(null); } catch (e) { /* */ }
   });
+
+  bot.on('respawn', () => log('Reapareció. Retomando la patrulla.'));
 
   bot.on('kicked', (reason, loggedIn) => log(`EXPULSADO (loggedIn=${loggedIn}): ${describeReason(reason)}`));
   bot.on('error', (err) => log(`Error: ${err.code || err.message}`));
@@ -145,9 +159,10 @@ function startBrain(bot) {
   bot.__state = 'idle';
   log('Comportamiento activo: patrulla, combate, huida y recogida de armas.');
 
+  // Cada 2s (no 1s) para bajar la carga de CPU y evitar timeouts en Render Free.
   bot.__brain = setInterval(() => {
     try { think(bot); } catch (e) { log(`think() error: ${e.message}`); }
-  }, 1000);
+  }, 2000);
 }
 
 function isHostile(bot, e) {

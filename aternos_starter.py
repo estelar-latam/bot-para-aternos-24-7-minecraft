@@ -88,13 +88,17 @@ def monitor_loop():
             print("[ATERNOS] Detenido por el usuario.", flush=True)
             break
 
-        except Exception:  # noqa: BLE001
-            # Errores de login/red/Cloudflare: forzamos re-login con backoff.
-            print("[ATERNOS] Error en el bucle de monitoreo:", flush=True)
-            traceback.print_exc()
+        except Exception as err:  # noqa: BLE001
+            # Login/red/Cloudflare. El auto-encendido es "best-effort": el bot AFK
+            # ya mantiene el servidor encendido 24/7, así que esto NO es crítico.
+            # Registramos un mensaje corto (sin traceback) para no ensuciar los logs.
             srv = None
             keep_alive.set_status("error")
-            print(f"[ATERNOS] Reintentando en {backoff}s...", flush=True)
+            print(
+                f"[ATERNOS] Auto-encendido no disponible ({type(err).__name__}). "
+                f"El bot AFK mantiene el server encendido. Reintento en {backoff}s.",
+                flush=True,
+            )
             time.sleep(backoff)
             backoff = min(backoff * 2, 600)  # backoff exponencial, máx 10 min
 
