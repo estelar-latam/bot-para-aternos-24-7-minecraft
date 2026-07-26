@@ -79,8 +79,10 @@
   .mc-window h3 button { background: #b33; color: #fff; border: 0; border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-weight: 800; }
   .mc-top { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
   .mc-armor { display: grid; grid-template-rows: repeat(4, var(--s)); gap: 3px; }
-  .mc-char { flex: 1; min-width: 150px; background: #17171f; border-radius: 4px; display: grid; place-items: center; font-size: 38px; }
-  .mc-right { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; }
+  .mc-char { flex: 1; min-width: 120px; background: #17171f; border-radius: 4px; display: grid; place-items: center; font-size: 38px; }
+  .mc-offhand { display: flex; flex-direction: column; justify-content: flex-end; }
+  .mc-craftbox { display: flex; flex-direction: column; justify-content: flex-start; gap: 5px; }
+  .mc-craftlabel { font-family: monospace; font-size: 12px; color: #3a3a3a; white-space: nowrap; }
   .mc-craft { display: flex; align-items: center; gap: 6px; }
   .mc-craftgrid { display: grid; grid-template-columns: repeat(2, var(--s)); gap: 3px; }
   .mc-arrow { font-size: 18px; color: #4a4a4a; }
@@ -333,7 +335,8 @@
       `<div class="mc-top">`
       + `<div class="mc-armor">${armor}</div>`
       + `<div class="mc-char">🧍</div>`
-      + `<div class="mc-right">${slotHtml(d.offhand, 'arm')}`
+      + `<div class="mc-offhand">${slotHtml(d.offhand, 'arm')}</div>`
+      + `<div class="mc-craftbox"><div class="mc-craftlabel">Fabricación</div>`
       + `<div class="mc-craft"><div class="mc-craftgrid">${craft}</div><span class="mc-arrow">➜</span>${slotHtml(null)}</div></div>`
       + `</div>`
       + `<div class="mc-grid">${main}</div>`
