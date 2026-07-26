@@ -48,14 +48,27 @@ const settings = {
   roamRadius: parseInt(process.env.ROAM_RADIUS || '16', 10),
 };
 
-const HOSTILE_NAMES = new Set([
+// Mobs que el bot SÍ ataca (cuerpo a cuerpo, seguros de pelear).
+const ATTACK_NAMES = new Set([
   'slime', 'magma_cube', 'zombie', 'husk', 'drowned', 'zombie_villager',
   'skeleton', 'stray', 'wither_skeleton', 'bogged', 'spider', 'cave_spider',
-  'creeper', 'witch', 'pillager', 'vindicator', 'evoker', 'ravager',
-  'blaze', 'ghast', 'zombified_piglin', 'piglin', 'piglin_brute', 'hoglin',
-  'zoglin', 'phantom', 'silverfish', 'endermite', 'guardian', 'elder_guardian',
-  'warden', 'breeze',
+  'witch', 'pillager', 'vindicator', 'evoker', 'ravager',
+  'zombified_piglin', 'piglin', 'piglin_brute', 'hoglin', 'zoglin',
+  'silverfish', 'endermite', 'guardian', 'elder_guardian', 'breeze',
 ]);
+
+// Mobs de los que el bot HUYE en vez de atacar:
+//  - creeper: explota y lo mata/echa del servidor.
+//  - enderman: se enfada si lo atacas/miras -> mejor no provocarlo.
+//  - warden: demasiado peligroso.
+const AVOID_NAMES = new Set(['creeper', 'enderman', 'warden']);
+
+// Distancia (bloques) a la que empieza a alejarse de un mob peligroso.
+const AVOID_RANGE = parseInt(process.env.AVOID_RANGE || '10', 10);
+
+// Jugador que atacó al bot (para defenderse solo si le pegan primero).
+let aggressor = null;
+let aggressorUntil = 0;
 
 // ----- Estado global compartido con el panel -----
 let currentBot = null;
@@ -136,10 +149,14 @@ function createBot() {
     // --- Modo activo ---
     try {
       const movements = new Movements(bot);
-      movements.canDig = false;
-      movements.allow1by1towers = false;
-      movements.allowParkour = false;
-      movements.allowSprinting = false;
+      movements.allowParkour = false;     // sin saltos raros (anti-cheat)
+      movements.allowSprinting = false;   // movimiento suave, evita kicks
+      movements.maxDropDown = 3;          // NO se deja caer más de 3 bloques (evita caídas/daño)
+      movements.infiniteLiquidDropdownDistance = false;
+      movements.canDig = true;            // puede romper bloques para subir a zona segura...
+      movements.digCost = 10;             // ...pero le "cuesta" -> solo si de verdad hace falta
+      movements.allow1by1towers = true;   // puede pilarear (poner bloques) para salir de hoyos
+      movements.canOpenDoors = true;
       bot.pathfinder.setMovements(movements);
       bot.pvp.movements = movements;
       bot.pathfinder.thinkTimeout = 2000;
@@ -160,6 +177,32 @@ function createBot() {
   });
 
   bot.on('respawn', () => log('Reapareció. Retomando la actividad.'));
+
+  // Defensa propia: si el bot recibe daño y hay un JUGADOR pegado a él
+  // (y ningún mob más cerca), lo marca como agresor para contraatacar.
+  let lastHealth = 20;
+  bot.on('health', () => {
+    const h = bot.health;
+    if (h < lastHealth - 0.01 && bot.entity) {
+      try {
+        const player = bot.nearestEntity(
+          (e) => e.type === 'player' && e.username && e.username !== USERNAME && dist(bot, e) <= 5
+        );
+        if (player) {
+          // Solo culpa al jugador si NO hay un mob peligroso/atacable más cerca.
+          const mob = bot.nearestEntity(
+            (e) => (isDanger(e) || isAttackable(e)) && dist(bot, e) < dist(bot, player)
+          );
+          if (!mob) {
+            aggressor = player;
+            aggressorUntil = Date.now() + 12000; // se defiende durante 12s
+            log(`Me atacó ${player.username}. Me defiendo.`);
+          }
+        }
+      } catch (e) { /* */ }
+    }
+    lastHealth = h;
+  });
 
   bot.on('kicked', (reason, loggedIn) => log(`EXPULSADO (loggedIn=${loggedIn}): ${describeReason(reason)}`));
   bot.on('error', (err) => log(`Error: ${err.code || err.message}`));
@@ -188,10 +231,12 @@ function startBrain(bot) {
   }, 2000);
 }
 
-function isHostile(bot, e) {
-  if (!e || e === bot.entity) return false;
-  if (e.kind && String(e.kind).toLowerCase().includes('hostile')) return true;
-  return HOSTILE_NAMES.has(e.name);
+function isAttackable(e) {
+  return e && ATTACK_NAMES.has(e.name);
+}
+
+function isDanger(e) {
+  return e && AVOID_NAMES.has(e.name);
 }
 
 function isItemDrop(e) {
@@ -254,22 +299,50 @@ function think(bot) {
   }
 
   const health = typeof bot.health === 'number' ? bot.health : 20;
-  const threat = combatEnabled
-    ? bot.nearestEntity((e) => isHostile(bot, e) && dist(bot, e) <= settings.detectRange)
-    : null;
 
-  // 1) HUIR
+  // 1) VIDA BAJA -> huir del peligro más cercano
   if (health <= settings.fleeHealth) {
     if (bot.__state !== 'flee') {
       log(`Vida baja (${health}). Huyendo...`);
       bot.__state = 'flee';
     }
     currentState = 'huida';
-    fleeFrom(bot, threat);
+    const near = bot.nearestEntity((e) => (isDanger(e) || isAttackable(e)) && dist(bot, e) <= settings.detectRange);
+    fleeFrom(bot, near);
     return;
   }
 
-  // 2) LUCHAR
+  // 2) MOB PELIGROSO cerca (creeper / enderman / warden) -> HUIR, nunca atacar
+  const danger = bot.nearestEntity((e) => isDanger(e) && dist(bot, e) <= AVOID_RANGE);
+  if (danger) {
+    if (bot.__state !== 'avoid') {
+      log(`Peligro cerca (${danger.name}). Me alejo, no lo ataco.`);
+      bot.__state = 'avoid';
+    }
+    currentState = 'huida';
+    fleeFrom(bot, danger);
+    return;
+  }
+
+  // 3) DEFENSA PROPIA: contraatacar a un jugador que me golpeó
+  if (combatEnabled && aggressor && aggressor.isValid && Date.now() < aggressorUntil
+      && dist(bot, aggressor) <= settings.detectRange) {
+    equipBestWeapon(bot);
+    if (bot.pvp.target !== aggressor) {
+      bot.__state = 'fight';
+      bot.pvp.attack(aggressor);
+    }
+    currentState = 'combate';
+    return;
+  }
+  if (aggressor && (!aggressor.isValid || Date.now() >= aggressorUntil)) {
+    aggressor = null; // se acabó la defensa
+  }
+
+  // 4) ATACAR mobs hostiles seguros (NO jugadores, NO creepers/endermen)
+  const threat = combatEnabled
+    ? bot.nearestEntity((e) => isAttackable(e) && dist(bot, e) <= settings.detectRange)
+    : null;
   if (threat) {
     equipBestWeapon(bot);
     if (bot.pvp.target !== threat) {
@@ -285,7 +358,7 @@ function think(bot) {
     bot.__state = 'idle';
   }
 
-  // 3) RECOGER objetos
+  // 5) RECOGER objetos
   const drop = bot.nearestEntity((e) => isItemDrop(e) && dist(bot, e) <= settings.detectRange);
   if (drop) {
     if (bot.__state !== 'collect') {
@@ -297,7 +370,7 @@ function think(bot) {
     return;
   }
 
-  // 4) PATRULLAR
+  // 6) PATRULLAR
   const moving = bot.pathfinder.isMoving && bot.pathfinder.isMoving();
   if (bot.__state !== 'roam' || !moving) {
     bot.__state = 'roam';
