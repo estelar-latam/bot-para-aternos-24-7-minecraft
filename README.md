@@ -1,186 +1,164 @@
-# Bot para Aternos 24/7 (Minecraft)
+# 🤖 Bot para Aternos 24/7 (Minecraft)
 
-Bot para intentar mantener encendido un servidor de **Aternos** el mayor tiempo posible.
-Combina tres piezas:
+Bot para mantener un servidor de **Aternos** encendido el mayor tiempo posible, con **bot AFK inteligente** (camina, lucha, huye y recoge armas) y un **panel de control web** para manejarlo desde el navegador.
 
-1. **Auto-encendido** (`aternos_starter.py`) — inicia sesión en aternos.org, revisa el estado del servidor y pulsa **Start** cuando está apagado.
-2. **Bot AFK** (`afk_bot.js`) — se conecta al servidor con [mineflayer](https://github.com/PrismarineJS/mineflayer) y hace micro-movimientos para que Aternos no lo apague por inactividad.
-3. **Keep-alive** (`keep_alive.py`) — un pequeño servidor web que **UptimeRobot** pinguea para que el host gratuito no se duerma.
-
-Servidor de ejemplo configurado: `realityapp.aternos.me:40706` (PaperMC).
+Servidor de ejemplo configurado: `realityapp.aternos.me:40706` — PaperMC.
 
 ---
 
 ## ⚠️ Aviso importante (léelo antes de usar)
 
-- **Esto viola los Términos de Servicio de Aternos.** Aternos prohíbe expresamente los bots AFK y la automatización para mantener servidores encendidos 24/7. **Pueden banear tu cuenta.** Úsalo bajo tu propia responsabilidad.
-- **UptimeRobot NO enciende el servidor de Aternos.** Es un error muy común. UptimeRobot solo hace *pings*; su única función aquí es mantener **despierto el host** donde corre este bot (Replit/Render se duermen sin tráfico). **Quien enciende Aternos es `aternos_starter.py`.**
-- **Fiabilidad limitada.** Aternos usa protección Cloudflare/captcha y cambia su web a menudo, así que el login automático puede romperse. Si eso pasa, actualiza la librería (`pip install --upgrade python-aternos`).
-- Si buscas algo estable de verdad y sin riesgo de baneo, considera un hosting de pago barato en lugar de Aternos.
+- **Esto va contra los Términos de Servicio de Aternos.** Aternos prohíbe los bots AFK y la automatización para mantener servidores 24/7, y **puede banear tu cuenta**. Úsalo bajo tu propia responsabilidad.
+- **UptimeRobot NO enciende Aternos.** Solo hace *pings*; su función real es mantener **despierto el host** (Render se duerme sin tráfico). Quien mantiene el servidor encendido es el **bot AFK** (mientras haya un jugador conectado, Aternos no se apaga).
+- **Fiabilidad limitada.** Aternos usa Cloudflare/captcha, así que el auto-encendido por login web puede fallar (no es crítico: el bot AFK mantiene el server encendido igual).
 
 ---
 
-## ¿Cómo funciona?
+## 🧩 ¿Cómo funciona?
+
+Son **dos procesos** que corren juntos (ver [`start.sh`](start.sh)):
 
 ```
-                 ┌────────────────────┐   pings cada 5 min
-   UptimeRobot ──►  keep_alive.py     │◄───────────────────  (mantiene el HOST despierto)
-                 │  (Flask /health)   │
-                 └────────────────────┘
-                 ┌────────────────────┐   login + Start
-                 │  aternos_starter   ├────────────►  aternos.org  (enciende el servidor)
-                 │  .py               │
-                 └────────────────────┘
-                 ┌────────────────────┐   se conecta y se mueve
-                 │  afk_bot.js        ├────────────►  realityapp.aternos.me:40706
-                 │  (mineflayer)      │              (evita el apagado por inactividad)
-                 └────────────────────┘
+                       ┌───────────────────────────────┐
+ Navegador  ◄────────► │  afk_bot.js  (Node + Express)  │
+ (panel de control)    │                               │
+ UptimeRobot ─ /health►│  · Bot AFK con mineflayer     ├──► realityapp.aternos.me:40706
+                       │  · Panel web + API de control │      (se conecta y mantiene vivo)
+                       └───────────────────────────────┘
+                       ┌───────────────────────────────┐
+                       │  aternos_starter.py (Python)  ├──► aternos.org (login + "Start")
+                       │  · Auto-encendido (best-effort)│      cuando el server está apagado
+                       └───────────────────────────────┘
 ```
+
+- **`afk_bot.js` (Node):** se conecta al servidor de Minecraft, se mantiene dentro 24/7, y en modo activo **camina, lucha contra mobs, huye con poca vida y recoge/equipa armas**. Además **sirve el panel web** y el endpoint `/health`.
+- **`aternos_starter.py` (Python):** inicia sesión en aternos.org y pulsa **Start** cuando el servidor está apagado (best-effort; Cloudflare puede bloquearlo).
 
 ---
 
-## Requisitos
+## 🌐 Plataformas y páginas que se usan
 
-- Una cuenta de **aternos.org** con tu servidor ya creado.
-- **Python 3.11+** y **Node.js 18+**.
-- (Para 24/7) una cuenta gratuita en **Replit** o **Render**, y una cuenta gratuita en **UptimeRobot**.
-
----
-
-## Configuración
-
-1. Copia `.env.example` a `.env` y rellena tus datos:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Edita `.env`:
-
-   | Variable | Descripción |
-   |---|---|
-   | `ATERNOS_USER` / `ATERNOS_PASSWORD` | Credenciales de tu cuenta de Aternos. |
-   | `ATERNOS_SERVER` | Índice (`0` = primer servidor) o nombre exacto del servidor. |
-   | `SERVER_HOST` / `SERVER_PORT` | `realityapp.aternos.me` / `40706`. |
-   | `MC_VERSION` | Versión **real** de Minecraft de tu Paper (ej. `1.21.4`) o `auto`. |
-   | `BOT_USERNAME` | Nombre del bot dentro del juego. |
-   | `MOVEMENT` | `off` = estable, no se mueve (recomendado, obligatorio en MC 26.2). `on` = camina/salta (solo versiones 1.20.x/1.21.x). |
-   | `CHECK_INTERVAL` | Cada cuántos segundos se revisa el estado en Aternos. |
-   | `PORT` | Puerto del endpoint de keep-alive. |
-
-   > **Sobre la "Versión: 26.2 (71)"**: eso **no es un número de versión de Minecraft** (las versiones son tipo `1.21.x`). Pon en `MC_VERSION` la versión real de MC que corre tu servidor Paper, o deja `auto` para que el bot la detecte solo.
+| Plataforma | Para qué sirve |
+|---|---|
+| **[Aternos](https://aternos.org/)** | Aloja tu servidor gratuito de Minecraft |
+| **[GitHub](https://github.com/estelar-latam/bot-para-aternos-24-7-minecraft)** | Guarda el código de este bot |
+| **[Render](https://render.com/)** | 🔑 Ejecuta el bot 24/7 (Node + Python, gratis con Docker) |
+| **[UptimeRobot](https://uptimerobot.com/)** | Pinguea el bot cada 5 min para que Render no se duerma |
 
 ---
 
-## Uso en local (para probar)
+## 🚀 Despliegue paso a paso (Render)
 
-```bash
-# 1) Dependencias de Python
-pip install -r requirements.txt
+El repo incluye `Dockerfile` y `render.yaml`, así que Render lo despliega solo.
 
-# 2) Dependencias de Node
-npm install
+### 1) Cuenta bot en Aternos (si entraste con Google)
+Si tu cuenta de Aternos es de Google, no tiene contraseña y el bot no puede iniciar sesión. Crea una **cuenta normal** (usuario + contraseña) en aternos.org y **comparte el acceso** a tu servidor con ella (panel → **Acceso** → añadir usuario con permiso de *Iniciar*).
 
-# 3) Arrancar todo junto
-bash start.sh
-```
+### 2) Modo offline en el servidor
+Para que el bot (cuenta no premium) pueda entrar, el servidor debe estar en **modo craqueado**:
+- Aternos → **Opciones** → activa **"Craqueado"** (`online-mode=false`), **o** edita `server.properties` → `online-mode=false`.
+- **Reinicia** el servidor. En el log debe aparecer `SERVER IS RUNNING IN OFFLINE/INSECURE MODE`.
 
-O cada pieza por separado:
+### 3) Desplegar en Render
+1. [render.com](https://render.com) → **New +** → **Web Service** → conecta este repo.
+2. Render detecta `render.yaml` (runtime **Docker**, plan **Free**). Acepta.
+3. En **Environment** rellena las variables (ver tabla abajo). Mínimo obligatorio: `ATERNOS_USER`, `ATERNOS_PASSWORD` y `PANEL_TOKEN`.
+4. **Deploy**. Al terminar copia tu URL pública: `https://tu-servicio.onrender.com`.
 
-```bash
-python aternos_starter.py   # auto-encendido + keep-alive
-node afk_bot.js             # bot AFK
-python keep_alive.py        # solo el endpoint web (para probar UptimeRobot)
-```
+### 4) UptimeRobot (para el 24/7 real)
+El plan Free de Render se duerme a los ~15 min sin visitas. Evítalo:
+1. [uptimerobot.com](https://uptimerobot.com) → **New monitor** → **HTTP(s)**.
+2. **URL:** `https://tu-servicio.onrender.com/health`
+3. **Intervalo:** 5 minutos → **Create monitor**.
 
-En los logs deberías ver la secuencia:
-
-```
-[ATERNOS] Estado actual: offline
-[ATERNOS] Servidor apagado -> enviando START...
-[ATERNOS] Estado actual: starting
-[ATERNOS] Estado actual: online
-[AFK-BOT] ... Bot conectado y dentro del servidor. Iniciando anti-AFK.
-```
-
----
-
-## Despliegue 24/7
-
-### Opción A — Replit
-
-1. Sube este repositorio a Replit (Import from GitHub).
-2. En la pestaña **Secrets** (🔒) añade las mismas variables del `.env`.
-3. Pulsa **Run** (usa `start.sh` automáticamente).
-4. Copia la **URL pública** que te da Replit (algo como `https://tu-repl.usuario.repl.co`).
-
-### Opción B — Render (recomendada, con Docker)
-
-Este repo incluye `Dockerfile` y `render.yaml`, así que Render lo despliega solo:
-
-1. Entra en [render.com](https://render.com) → **New +** → **Web Service** → conecta este repo de GitHub.
-2. Render detecta el `render.yaml` (runtime **Docker**, plan **Free**). Acepta.
-3. En **Environment** rellena `ATERNOS_USER` y `ATERNOS_PASSWORD` (las demás ya vienen con valor por defecto).
-4. Deploy. Cuando termine, copia la **URL pública**: `https://tu-servicio.onrender.com`.
-
-> El plan free de Render duerme el servicio tras ~15 min sin tráfico. Por eso configuras UptimeRobot (siguiente paso): sus pings lo mantienen despierto.
-
-### Configurar UptimeRobot (mantiene el host despierto)
-
-1. Entra en [uptimerobot.com](https://uptimerobot.com/) y crea un monitor:
-   - **Monitor Type:** HTTP(s)
-   - **URL:** la URL pública de tu host + `/health` (ej. `https://tu-repl.usuario.repl.co/health`)
-   - **Monitoring Interval:** 5 minutos
-2. Guarda. UptimeRobot pingueará ese endpoint y evitará que Replit/Render se duerman.
-
-> Recuerda: esto mantiene despierto **el bot**, no el servidor de Aternos. El encendido de Aternos lo sigue haciendo `aternos_starter.py`.
+### 5) (Solo modo activo) Anti-cheat de movimiento
+Si el bot va a **caminar/luchar** (`MOVEMENT=on`), relaja el anti-trampas de Paper o te lo echará por `invalid_player_movement`:
+- Aternos → **Archivos** → `spigot.yml` → en `settings:` pon:
+  ```yaml
+  moved-wrongly-threshold: 100.0
+  moved-too-quickly-multiplier: 100.0
+  ```
+- Guarda y **reinicia** el servidor.
 
 ---
 
 ## 🎮 Panel de control web
 
-El bot incluye un **panel de control** en la misma URL pública (la de Render). Ábrela en el navegador:
-```
-https://tu-servicio.onrender.com
-```
+Abre tu URL de Render en el navegador (`https://tu-servicio.onrender.com`). Si definiste `PANEL_TOKEN`, te pedirá esa contraseña.
 
-Desde el panel puedes:
-- 📊 **Ver el estado**: vida, comida, posición, actividad (patrulla/combate/huida), tiempo conectado y jugadores en el servidor.
-- 🎮 **Controlar**: Pausar/Reanudar, Combate ON/OFF, Saltar, Reconectar.
-- 💬 **Chat y movimiento**: escribir un mensaje para que el bot lo diga, o mandarlo a un jugador (botón "Ir").
-- ⚙️ **Ajustes en caliente**: cambiar cuándo huye, el rango de detección y el radio de patrulla sin tocar Render.
+Desde el panel:
+- 📊 **Estado**: vida, comida, posición, actividad (patrulla/combate/huida), tiempo conectado.
+- 👥 **Jugadores** en el servidor (con botón *Ir* para mandar el bot hacia uno).
+- 🎮 **Controles**: Pausar/Reanudar, Combate ON/OFF, Saltar, Reconectar, **Decir** un mensaje en el chat.
+- ⚙️ **Ajustes en caliente**: cuándo huye, rango de detección y radio de patrulla (inmediato, sin reiniciar).
 
-**Contraseña:** define la variable `PANEL_TOKEN` en Render con una clave fuerte. El panel la pedirá para ver/controlar el bot. Si la dejas vacía, el panel queda **abierto** (cualquiera con la URL puede controlarlo).
-
-> El mismo servidor web sirve `/health` para UptimeRobot, así que tu monitor sigue funcionando igual.
-
-## Solución de problemas
-
-| Problema | Causa probable | Solución |
-|---|---|---|
-| El login de Aternos falla | Aternos cambió su web / Cloudflare | `pip install --upgrade python-aternos` |
-| Pide verificación / 2FA | Cuenta con 2FA activo | Desactiva 2FA o usa una cuenta sin él |
-| El bot AFK no entra | El servidor aún no está `online` | Es normal; se reintenta solo cada pocos segundos |
-| El bot entra y sale en bucle (`Invalid move player packet received`) | Versión muy nueva (ej. 26.2) que rechaza el movimiento de mineflayer | Deja `MOVEMENT=off` (el bot se queda quieto pero conectado). El movimiento solo funciona en 1.20.x/1.21.x |
-| `Unsupported version` en mineflayer | `MC_VERSION` incorrecta | Pon la versión real de MC o `auto` |
-| El host se sigue durmiendo | UptimeRobot mal configurado | Revisa que la URL `/health` responde 200 |
+> El panel es accesible desde la URL pública. **Define siempre `PANEL_TOKEN`** con una clave fuerte para que nadie más pueda controlar el bot.
 
 ---
 
-## Archivos del proyecto
+## 🕹️ Modos del bot (`MOVEMENT`)
+
+| Modo | Qué hace | Cuándo usarlo |
+|---|---|---|
+| **`off`** (estable) | Solo se queda conectado (sin moverse) | Versiones muy nuevas (ej. **MC 26.2**) que rechazan el movimiento de mineflayer |
+| **`on`** (activo) | **Camina, lucha, huye con poca vida y recoge/equipa armas** | Versiones compatibles con mineflayer: **1.20.x / 1.21.x** (recomendado **1.21.4**) |
+
+> **Versión de Minecraft:** mineflayer va unos meses por detrás de la última versión. Para el modo activo usa **1.21.4** (o 1.20.x). No conviertas un mundo de 26.2 a 1.21.4 (se corrompería): usa un **servidor o mundo nuevo**.
+
+---
+
+## 🔧 Variables de entorno
+
+| Variable | Descripción | Por defecto |
+|---|---|---|
+| `ATERNOS_USER` | Usuario de tu cuenta de Aternos (la del bot) | — (obligatorio) |
+| `ATERNOS_PASSWORD` | Contraseña de esa cuenta | — (obligatorio) |
+| `ATERNOS_SERVER` | Índice (`0` = primero) o nombre del servidor | `0` |
+| `SERVER_HOST` | Host del servidor | `realityapp.aternos.me` |
+| `SERVER_PORT` | Puerto del servidor | `40706` |
+| `MC_VERSION` | Versión de Minecraft (`auto` o ej. `1.21.4`) | `auto` |
+| `BOT_USERNAME` | Nombre del bot en el juego | `AFKBot` |
+| `MOVEMENT` | `off` (estable) u `on` (camina/lucha) | `off` |
+| `FLEE_HEALTH` | Vida (0-20) por debajo de la cual huye | `8` |
+| `DETECT_RANGE` | Radio (bloques) para detectar mobs/objetos | `16` |
+| `ROAM_RADIUS` | Radio (bloques) de patrulla | `16` |
+| `CHECK_INTERVAL` | Segundos entre chequeos del auto-encendido | `60` |
+| `AFK_INTERVAL` | Segundos entre acciones anti-AFK (modo estable) | `30` |
+| `RECONNECT_DELAY` | Segundos antes de reconectar si se cae | `15` |
+| `PANEL_TOKEN` | Contraseña del panel web (¡ponla!) | — (vacío = abierto) |
+| `PORT` | Puerto web (Render lo asigna solo) | `8080` |
+
+---
+
+## 📁 Archivos del proyecto
 
 | Archivo | Función |
 |---|---|
-| `aternos_starter.py` | Auto-encendido del servidor + lanza el keep-alive |
-| `afk_bot.js` | Bot AFK con mineflayer |
-| `keep_alive.py` | Endpoint web para UptimeRobot |
-| `config.py` | Carga y valida la configuración |
-| `start.sh` | Lanza los dos procesos juntos |
+| `afk_bot.js` | Bot AFK (mineflayer) + panel web + API de control (Express) |
+| `panel.html` | Interfaz del panel de control |
+| `aternos_starter.py` | Auto-encendido del servidor (python-aternos) |
+| `config.py` | Carga y valida la configuración de Python |
+| `start.sh` | Lanza los dos procesos (Node + Python) |
+| `Dockerfile` / `render.yaml` | Despliegue en Render con Docker |
+| `Procfile` / `.replit` / `replit.nix` | Despliegue alternativo |
+| `requirements.txt` / `package.json` | Dependencias de Python / Node |
 | `.env.example` | Plantilla de configuración |
-| `Procfile` / `.replit` / `replit.nix` | Config de despliegue |
 
 ---
 
-## Licencia
+## 🩺 Solución de problemas
+
+| Problema | Causa | Solución |
+|---|---|---|
+| `Failed to verify username` / `invalid session` | Servidor en modo premium | Activa **Craqueado** (`online-mode=false`) y reinicia |
+| `invalid_player_movement` (entra y sale) | Anti-cheat de movimiento | Sube los valores en `spigot.yml` (ver despliegue) |
+| Entra/sale en MC 26.2 | mineflayer no soporta el movimiento de esa versión | Usa `MOVEMENT=off`, o un servidor 1.21.4 |
+| `CloudflareError` en los logs | python-aternos no pasa Cloudflare | No crítico: el bot AFK mantiene el server encendido |
+| El bot se cae por "Timed out" | Render Free tiene poca CPU | Ya mitigado (movimiento suave); reconecta solo |
+| El login de Aternos falla | Aternos cambió su web | `pip install --upgrade python-aternos` |
+
+---
+
+## 📜 Licencia
 
 MIT — ver [LICENSE](LICENSE).

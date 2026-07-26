@@ -3,8 +3,8 @@
 #   pip install --upgrade python-aternos
 python-aternos>=3.0.6
 
-# Servidor web mínimo para el endpoint de keep-alive (UptimeRobot).
-Flask>=3.0.0
-
 # Carga de variables desde el archivo .env
 python-dotenv>=1.0.0
+
+# NOTA: la web (panel + /health para UptimeRobot) la sirve ahora el bot de Node
+# (afk_bot.js con Express), así que Flask ya no es necesario.

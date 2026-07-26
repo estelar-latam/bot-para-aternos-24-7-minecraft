@@ -59,6 +59,7 @@ const HOSTILE_NAMES = new Set([
 
 // ----- Estado global compartido con el panel -----
 let currentBot = null;
+let connected = false; // true solo mientras el bot está realmente dentro del servidor
 let paused = false;
 let combatEnabled = true;
 let currentState = 'desconectado';
@@ -113,6 +114,7 @@ function createBot() {
   function scheduleReconnect(where) {
     if (reconnected) return;
     reconnected = true;
+    connected = false;
     stopTimers();
     currentState = 'desconectado';
     log(`Reconectando en ${RECONNECT_DELAY / 1000}s (motivo: ${where})...`);
@@ -122,6 +124,7 @@ function createBot() {
   bot.once('login', () => log('Login aceptado. Esperando spawn...'));
 
   bot.once('spawn', () => {
+    connected = true;
     if (!MOVEMENT) {
       bot.physicsEnabled = false;
       currentState = 'estable';
@@ -328,7 +331,7 @@ function buildStatus() {
   };
   const bot = currentBot;
   try {
-    if (bot && bot.entity) {
+    if (connected && bot && bot.entity) {
       s.online = true;
       s.health = Math.round((bot.health || 0) * 10) / 10;
       s.food = Math.round(bot.food || 0);
