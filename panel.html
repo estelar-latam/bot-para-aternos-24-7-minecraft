@@ -67,6 +67,31 @@
   .b-yellow { background: linear-gradient(180deg,#ffd23f,#f0b400); }
   .b-purple { background: linear-gradient(180deg,#b98bff,#8b5cf6); color: #fff; }
   .b-gray { background: linear-gradient(180deg,#8aa0c8,#5f76a3); color: #fff; }
+  .b-brown { background: linear-gradient(180deg,#c8965a,#9c6a34); color: #fff; }
+
+  /* Modal inventario estilo Minecraft */
+  .modal { position: fixed; inset: 0; background: rgba(6,12,24,.85); display: none; place-items: center; z-index: 90; padding: 16px; }
+  .modal.show { display: grid; }
+  .mc-window { background: #c6c6c6; border: 4px solid; border-color: #fefefe #565656 #565656 #fefefe; border-radius: 4px;
+    padding: 14px; width: 100%; max-width: 430px; color: #2a2a2a; box-shadow: 0 14px 44px rgba(0,0,0,.55); }
+  .mc-window h3 { font-family: monospace; font-size: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .mc-window h3 button { background: #b33; color: #fff; border: 0; border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-weight: 800; }
+  .mc-top { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: start; margin-bottom: 10px; }
+  .mc-armor { display: grid; grid-template-rows: repeat(4,1fr); gap: 3px; }
+  .mc-char { background: #17171f; border-radius: 4px; display: grid; place-items: center; font-size: 38px; min-height: 100%; }
+  .mc-right { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .mc-craft { display: flex; align-items: center; gap: 6px; }
+  .mc-craftgrid { display: grid; grid-template-columns: repeat(2,1fr); gap: 3px; }
+  .mc-arrow { font-size: 18px; color: #4a4a4a; }
+  .mc-grid { display: grid; grid-template-columns: repeat(9,1fr); gap: 3px; margin-bottom: 8px; }
+  .mc-hotbar { display: grid; grid-template-columns: repeat(9,1fr); gap: 3px; }
+  .mc-slot { aspect-ratio: 1/1; background: #8b8b8b; border: 2px solid; border-color: #373737 #ffffff #ffffff #373737;
+    position: relative; display: grid; place-items: center; overflow: hidden; }
+  .mc-slot.hot { background: #7a7a7a; }
+  .mc-slot.arm { background: #7f7f8f; }
+  .mc-lbl { font-size: 7px; line-height: 1.05; text-align: center; color: #f4f4f4; text-shadow: 1px 1px #2f2f2f; padding: 1px; word-break: break-word; }
+  .mc-cnt { position: absolute; right: 1px; bottom: -1px; font: 800 12px monospace; color: #fff; text-shadow: 1px 1px #2a2a2a; }
+  .mc-empty { text-align: center; color: #555; font-family: monospace; padding: 24px 8px; }
 
   .row { display: flex; gap: 8px; margin-top: 10px; }
   input[type=text], input[type=password], input[type=number] {
@@ -138,6 +163,7 @@
         <button class="gm b-green" onclick="act('resume')"><span class="ico">▶️</span>Reanudar</button>
         <button class="gm b-blue" onclick="act('reconnect')"><span class="ico">🔄</span>Reconectar</button>
         <button class="gm b-gray" onclick="refresh()"><span class="ico">📡</span>Actualizar</button>
+        <button class="gm b-brown" onclick="openInv()"><span class="ico">🎒</span>Inventario</button>
       </div>
       <div class="row">
         <input type="text" id="sayInput" placeholder="Escribe algo para que lo diga…" maxlength="240" />
@@ -162,6 +188,14 @@
   </div>
 
   <div class="footer">Bot Aternos 24/7 · <a href="https://github.com/estelar-latam/bot-para-aternos-24-7-minecraft" target="_blank">Repositorio</a></div>
+</div>
+
+<!-- Modal Inventario -->
+<div class="modal" id="invModal" onclick="if(event.target===this)closeInv()">
+  <div class="mc-window">
+    <h3>🎒 Inventario · <span id="invName">—</span> <button onclick="closeInv()">✕</button></h3>
+    <div id="invBody"><div class="mc-empty">Cargando…</div></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -276,8 +310,45 @@
     } catch (e) { $('loginErr').textContent = 'Error de conexión'; }
   }
 
+  // ---- Inventario ----
+  let invOpen = false;
+  function slotHtml(item, extra) {
+    if (!item) return `<div class="mc-slot ${extra || ''}"></div>`;
+    const short = (item.display || item.name).replace(/_/g, ' ');
+    return `<div class="mc-slot ${extra || ''}" title="${short} ×${item.count}">`
+      + `<span class="mc-lbl">${short}</span>`
+      + (item.count > 1 ? `<span class="mc-cnt">${item.count}</span>` : '')
+      + `</div>`;
+  }
+  function renderInv(d) {
+    $('invName').textContent = d.username || '—';
+    if (!d.online) { $('invBody').innerHTML = '<div class="mc-empty">El bot está desconectado</div>'; return; }
+    const armor = d.armor.map((s) => slotHtml(s, 'arm')).join('');
+    const craft = d.crafting.map((s) => slotHtml(s)).join('');
+    const main = d.main.map((s) => slotHtml(s)).join('');
+    const hot = d.hotbar.map((s) => slotHtml(s, 'hot')).join('');
+    $('invBody').innerHTML =
+      `<div class="mc-top">`
+      + `<div class="mc-armor">${armor}</div>`
+      + `<div class="mc-char">🧍</div>`
+      + `<div class="mc-right">${slotHtml(d.offhand, 'arm')}`
+      + `<div class="mc-craft"><div class="mc-craftgrid">${craft}</div><span class="mc-arrow">➜</span>${slotHtml(null)}</div></div>`
+      + `</div>`
+      + `<div class="mc-grid">${main}</div>`
+      + `<div class="mc-hotbar">${hot}</div>`;
+  }
+  async function refreshInv() {
+    try {
+      const r = await fetch('/api/inventory', { headers: headers() });
+      if (r.status === 401) { showGate(); return; }
+      renderInv(await r.json());
+    } catch (e) { /* red */ }
+  }
+  function openInv() { invOpen = true; $('invModal').classList.add('show'); refreshInv(); }
+  function closeInv() { invOpen = false; $('invModal').classList.remove('show'); }
+
   refresh();
-  setInterval(refresh, 3000);
+  setInterval(() => { refresh(); if (invOpen) refreshInv(); }, 3000);
 </script>
 </body>
 </html>

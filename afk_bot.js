@@ -417,6 +417,34 @@ function buildStatus() {
   return s;
 }
 
+// Devuelve el inventario del bot con la distribución de la ventana de jugador:
+// armadura (5-8), crafteo (1-4), inventario principal (9-35), hotbar (36-44),
+// mano secundaria (45).
+function buildInventory() {
+  const out = {
+    online: false, username: USERNAME,
+    armor: [null, null, null, null], // casco, peto, pantalón, botas
+    offhand: null, crafting: [null, null, null, null],
+    main: [], hotbar: [],
+  };
+  const bot = currentBot;
+  try {
+    if (!connected || !bot || !bot.inventory) return out;
+    out.online = true;
+    const slot = (i) => {
+      const it = bot.inventory.slots[i];
+      if (!it) return null;
+      return { name: it.name, display: it.displayName || it.name, count: it.count };
+    };
+    out.armor = [slot(5), slot(6), slot(7), slot(8)];
+    out.offhand = slot(45);
+    out.crafting = [slot(1), slot(2), slot(3), slot(4)];
+    for (let i = 9; i <= 35; i++) out.main.push(slot(i));
+    for (let i = 36; i <= 44; i++) out.hotbar.push(slot(i));
+  } catch (e) { /* inventario no disponible */ }
+  return out;
+}
+
 function handleAction(action, value) {
   const bot = currentBot;
   switch (action) {
@@ -493,6 +521,8 @@ function startPanel() {
   });
 
   app.get('/api/status', requireToken, (req, res) => res.json(buildStatus()));
+
+  app.get('/api/inventory', requireToken, (req, res) => res.json(buildInventory()));
 
   app.post('/api/action', requireToken, (req, res) => {
     const { action, value } = req.body || {};
