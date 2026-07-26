@@ -4,6 +4,38 @@ Bot para mantener un servidor de **Aternos** encendido el mayor tiempo posible, 
 
 Servidor de ejemplo configurado: `realityapp.aternos.me:40706` — PaperMC.
 
+🎮 **Panel en vivo de este proyecto:** [bot-para-aternos-24-7-minecraft.onrender.com](https://bot-para-aternos-24-7-minecraft.onrender.com/) *(protegido con contraseña)*
+
+---
+
+## ✨ Funciones y mejoras implementadas
+
+Un repaso de todo lo que hace el bot a día de hoy:
+
+**🟢 Mantener el servidor 24/7**
+- Bot AFK que se conecta y se **mantiene dentro** para que Aternos no se apague.
+- **Auto-encendido** del servidor con `python-aternos` cuando está apagado (best-effort).
+- Endpoint `/health` + **UptimeRobot** para que el host (Render) no se duerma.
+- **Reconexión automática** si se cae, y **blindaje anti-crash** (ningún error tumba el proceso).
+
+**🤖 Bot inteligente (modo activo, `MOVEMENT=on`)**
+- **Camina y patrulla** el mapa (con `mineflayer-pathfinder`).
+- **Lucha** contra mobs hostiles y **auto-equipa** la mejor espada/hacha (`mineflayer-pvp`).
+- **Huye** cuando le quedan pocos corazones.
+- **Recoge y equipa armas/objetos** del suelo.
+- **Revive al morir** y sigue dentro (no abandona el servidor).
+- **Evita caídas** (no se deja caer de más de 3 bloques) y puede **cavar/pilarear con cuidado** para subir a zona segura.
+- **Huye de creepers, endermen y wardens** (no los provoca).
+- **Solo ataca jugadores en defensa propia** (si le pegan primero).
+- Modo **estable** (`MOVEMENT=off`) para versiones nuevas de Minecraft que rechazan el movimiento.
+
+**🖥️ Panel de control web** (protegido con `PANEL_TOKEN`)
+- 📊 **Estado en vivo**: vida, comida, posición, actividad, tiempo conectado.
+- 👥 **Jugadores** conectados (con botón *Ir* para mandar el bot hacia uno).
+- 🎮 **Controles**: Pausar/Reanudar, Combate ON/OFF, Saltar, Reconectar, **Decir** en el chat.
+- 🎒 **Visor de inventario** estilo Minecraft (armadura, mano secundaria, crafteo, inventario y hotbar).
+- ⚙️ **Ajustes en caliente**: cuándo huye, rango de detección y radio de patrulla, sin reiniciar.
+
 ---
 
 ## ⚠️ Aviso importante (léelo antes de usar)
@@ -84,12 +116,15 @@ Si el bot va a **caminar/luchar** (`MOVEMENT=on`), relaja el anti-trampas de Pap
 
 ## 🎮 Panel de control web
 
-Abre tu URL de Render en el navegador (`https://tu-servicio.onrender.com`). Si definiste `PANEL_TOKEN`, te pedirá esa contraseña.
+Abre tu URL de Render en el navegador. Si definiste `PANEL_TOKEN`, te pedirá esa contraseña.
+- **Panel en vivo de este proyecto:** [https://bot-para-aternos-24-7-minecraft.onrender.com/](https://bot-para-aternos-24-7-minecraft.onrender.com/)
+- En tu despliegue será `https://tu-servicio.onrender.com`
 
 Desde el panel:
 - 📊 **Estado**: vida, comida, posición, actividad (patrulla/combate/huida), tiempo conectado.
 - 👥 **Jugadores** en el servidor (con botón *Ir* para mandar el bot hacia uno).
 - 🎮 **Controles**: Pausar/Reanudar, Combate ON/OFF, Saltar, Reconectar, **Decir** un mensaje en el chat.
+- 🎒 **Inventario**: ventana estilo Minecraft con la armadura, mano secundaria, crafteo, inventario y hotbar del bot (se actualiza sola).
 - ⚙️ **Ajustes en caliente**: cuándo huye, rango de detección y radio de patrulla (inmediato, sin reiniciar).
 
 > El panel es accesible desde la URL pública. **Define siempre `PANEL_TOKEN`** con una clave fuerte para que nadie más pueda controlar el bot.
